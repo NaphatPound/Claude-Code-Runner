@@ -1,0 +1,15 @@
+{
+  "name": "claude-code-runner-mcp",
+  "version": "1.0.0",
+  "description": "MCP Server that exposes Claude Code Runner backend as tools for AI services",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "ws": "^8.18.0"
+  }
+}
