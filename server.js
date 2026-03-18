@@ -92,23 +92,72 @@ function runTask(task) {
   task.startedAt = new Date().toISOString();
   broadcast(task, { type: 'status', status: task.status, startedAt: task.startedAt });
 
-  const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
+  const shell = os.platform() === 'win32' ? 'powershell.exe' : '/bin/zsh';
 
-  // Spawn a real PTY with a shell
-  const ptyProcess = pty.spawn(shell, [], {
-    name: 'xterm-256color',
-    cols: 120,
-    rows: 40,
-    cwd: task.workingDir,
-    env: { ...process.env, FORCE_COLOR: '1' },
-  });
+  let ptyProcess;
+  try {
+    // Spawn a real PTY with a shell
+    ptyProcess = pty.spawn(shell, [], {
+      name: 'xterm-256color',
+      cols: 120,
+      rows: 40,
+      cwd: task.workingDir,
+      env: { ...process.env, FORCE_COLOR: '1' },
+    });
+  } catch (err) {
+    console.error('Failed to spawn PTY:', err.message);
+    task.status = 'failed';
+    task.finishedAt = new Date().toISOString();
+    task.output = `Error: Failed to spawn terminal: ${err.message}\n`;
+    broadcast(task, { type: 'output', data: task.output });
+    broadcast(task, { type: 'status', status: task.status, finishedAt: task.finishedAt });
+    return;
+  }
 
   task.ptyProcess = ptyProcess;
+
+  // Track state for auto-handling prompts
+  let promptSent = false;
+  let trustHandled = false;
+  let claudeReady = false;
+  let outputBuffer = '';
 
   // Stream ALL output to browser via WebSocket
   ptyProcess.onData((data) => {
     task.output += data;
+    outputBuffer += data;
     broadcast(task, { type: 'output', data });
+
+    // Only start watching for Claude prompts after claude command has been running a bit
+    if (!claudeReady) return;
+
+    // Strip ANSI escape codes for reliable matching
+    const cleanBuffer = outputBuffer.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
+
+    // Auto-handle "Trust this folder" prompt — send Enter to accept (Yes is default)
+    if (!trustHandled && /trust|Trust|Do you trust/i.test(cleanBuffer)) {
+      trustHandled = true;
+      outputBuffer = '';
+      setTimeout(() => {
+        ptyProcess.write('\r');
+        console.log(`[Task ${task.id}] Auto-accepted "Trust folder" prompt`);
+      }, 800);
+      return;
+    }
+
+    // Auto-send the task prompt once Claude Code is ready
+    // Claude Code shows specific patterns when ready for input
+    if (!promptSent && /Tips:|What can I help|How can I help/i.test(cleanBuffer)) {
+      promptSent = true;
+      outputBuffer = '';
+      setTimeout(() => {
+        ptyProcess.write(task.prompt);
+        setTimeout(() => {
+          ptyProcess.write('\r');
+          console.log(`[Task ${task.id}] Auto-typed and sent task prompt`);
+        }, 300);
+      }, 1000);
+    }
   });
 
   ptyProcess.onExit(({ exitCode }) => {
@@ -124,28 +173,46 @@ function runTask(task) {
     // Type the claude command into the terminal — just like a human would
     const claudeCmd = 'claude --dangerously-skip-permissions\r';
     ptyProcess.write(claudeCmd);
+    console.log(`[Task ${task.id}] Sent claude command`);
 
-    // Step 2: Wait for Claude Code to start up, then type the prompt
+    // Start watching for Claude prompts after a delay (skip shell prompt noise)
     setTimeout(() => {
-      // Type the task prompt and press Enter
-      ptyProcess.write(task.prompt);
-      ptyProcess.write('\r');
-    }, 3000); // Wait 3 seconds for Claude to start up
+      claudeReady = true;
+      outputBuffer = '';
+      console.log(`[Task ${task.id}] Now watching for Claude ready prompt...`);
+    }, 3000);
+
+    // Fallback: if prompt detection doesn't trigger, send after timeout
+    setTimeout(() => {
+      if (!promptSent) {
+        promptSent = true;
+        ptyProcess.write(task.prompt);
+        setTimeout(() => {
+          ptyProcess.write('\r');
+          console.log(`[Task ${task.id}] Fallback: auto-typed task prompt after timeout`);
+        }, 300);
+      }
+    }, 15000); // 15 second fallback
 
   }, 1000); // Wait 1 second for shell to be ready
 }
 
 // ─── REST API ──────────────────────────────────────────────────
 app.post('/api/tasks', (req, res) => {
-  const { prompt, workingDir } = req.body;
-  if (!prompt || !prompt.trim()) {
-    return res.status(400).json({ error: 'prompt is required' });
-  }
+  try {
+    const { prompt, workingDir } = req.body;
+    if (!prompt || !prompt.trim()) {
+      return res.status(400).json({ error: 'prompt is required' });
+    }
 
-  const task = new Task({ prompt: prompt.trim(), workingDir });
-  tasks.set(task.id, task);
-  runTask(task);
-  res.status(201).json(task.toJSON());
+    const task = new Task({ prompt: prompt.trim(), workingDir });
+    tasks.set(task.id, task);
+    runTask(task);
+    res.status(201).json(task.toJSON());
+  } catch (err) {
+    console.error('Error creating task:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/api/tasks', (req, res) => {

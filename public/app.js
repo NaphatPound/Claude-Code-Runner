@@ -1,6 +1,6 @@
 // ─── Config ────────────────────────────────────────────────
 const API_BASE = `${window.location.origin}/api`;
-const WS_URL = `ws://${window.location.host}`;
+const WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
 
 // ─── State ─────────────────────────────────────────────────
 let selectedTaskId = null;
@@ -135,6 +135,12 @@ async function createTask(prompt, workingDir) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt, workingDir: workingDir || undefined }),
     });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Server error ${res.status}: ${text}`);
+    }
+
     const task = await res.json();
 
     // Select the new task
@@ -144,7 +150,7 @@ async function createTask(prompt, workingDir) {
     return task;
   } catch (err) {
     console.error('Failed to create task:', err);
-    alert('Failed to create task. Is the server running?');
+    alert('Failed to create task: ' + err.message);
   }
 }
 
@@ -284,7 +290,11 @@ function formatTime(isoString) {
 
 // ─── Event Listeners ───────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  initTerminal();
+  try {
+    initTerminal();
+  } catch (err) {
+    console.error('Failed to initialize terminal:', err);
+  }
   connectWebSocket();
   fetchTasks();
 
