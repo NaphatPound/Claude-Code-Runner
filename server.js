@@ -287,6 +287,15 @@ wss.on('connection', (ws) => {
       if (msg.type === 'input' && subscribedTask && subscribedTask.ptyProcess) {
         subscribedTask.ptyProcess.write(msg.data);
       }
+
+      // Resize PTY to match browser terminal size
+      if (msg.type === 'resize' && subscribedTask && subscribedTask.ptyProcess) {
+        const cols = Math.max(10, Math.min(500, msg.cols || 80));
+        const rows = Math.max(2, Math.min(200, msg.rows || 24));
+        try {
+          subscribedTask.ptyProcess.resize(cols, rows);
+        } catch (e) {}
+      }
     } catch (e) {}
   });
 

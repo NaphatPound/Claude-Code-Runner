@@ -386,11 +386,14 @@ html, body {
   padding: 8px;
   background: #0d1117;
   overflow: hidden;
+  position: relative;
 }
 
 #terminal {
   height: 100%;
   width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 /* ── Modal ──────────────────────────────────────────────── */
@@ -494,18 +497,202 @@ input::placeholder {
   padding: 20px 24px;
 }
 
+/* ── Mobile Tab Bar ─────────────────────────────────────── */
+.mobile-tab-bar {
+  display: none;
+}
+
+.mobile-fab {
+  display: none;
+}
+
 /* ── Responsive ─────────────────────────────────────────── */
 @media (max-width: 768px) {
-  :root {
-    --sidebar-width: 100%;
-  }
   .app {
     flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
   }
+
+  /* Hide sidebar by default, show via tab */
   .sidebar {
-    max-height: 40vh;
+    width: 100%;
+    min-width: 100%;
+    height: calc(100dvh - 56px);
     border-right: none;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 10;
+    transition: transform 0.25s ease;
+  }
+
+  .sidebar.mobile-hidden {
+    transform: translateX(-100%);
+    pointer-events: none;
+  }
+
+  .sidebar-header {
+    padding: 12px;
+  }
+
+  .logo {
+    margin-bottom: 10px;
+  }
+
+  /* Main content fills screen on mobile */
+  .main-content {
+    width: 100%;
+    height: calc(100dvh - 56px);
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  .terminal-header {
+    padding: 0 10px;
+    height: 40px;
+  }
+
+  .terminal-title-text {
+    font-size: 11px;
+    max-width: 45vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .terminal-dot {
+    width: 8px;
+    height: 8px;
+  }
+
+  .terminal-container {
+    padding: 2px;
+    height: calc(100dvh - 56px - 40px);
+    overflow: hidden;
+  }
+
+  #terminal {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Allow horizontal scroll on xterm viewport */
+  #terminal .xterm-viewport {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #terminal .xterm-screen {
+    min-width: 100%;
+  }
+
+  /* Mobile Tab Bar */
+  .mobile-tab-bar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    z-index: 100;
+    padding: 0;
+  }
+
+  .mobile-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-tab.active {
+    color: var(--accent);
+  }
+
+  /* Floating Action Button */
+  .mobile-fab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    bottom: 72px;
+    right: 16px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #5a7ae6);
+    color: #fff;
+    border: none;
+    box-shadow: 0 4px 16px var(--accent-glow);
+    cursor: pointer;
+    z-index: 99;
+    transition: transform 0.2s, box-shadow 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-fab:active {
+    transform: scale(0.92);
+  }
+
+  /* Modal adjustments for mobile */
+  .modal {
+    width: 95vw;
+    max-width: 95vw;
+    max-height: 85dvh;
+    overflow-y: auto;
+  }
+
+  .modal-header {
+    padding: 16px 16px 0;
+  }
+
+  .form-group {
+    padding: 0 16px;
+    margin-top: 14px;
+  }
+
+  .modal-actions {
+    padding: 16px;
+  }
+
+  textarea {
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+
+  input[type="text"] {
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+
+  /* Hide desktop New Task button text on very small screens */
+  .btn-new-task span {
+    display: inline;
+  }
+
+  /* Task items - bigger touch targets */
+  .task-item {
+    padding: 14px 12px;
+    margin-bottom: 4px;
+  }
+
+  .task-item-prompt {
+    font-size: 14px;
   }
 }
 

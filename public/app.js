@@ -10,7 +10,12 @@ let fitAddon = null;
 let tasks = [];
 
 // ─── Initialize xterm.js ───────────────────────────────────
+function isMobile() {
+  return window.innerWidth <= 768;
+}
+
 function initTerminal() {
+  const mobile = isMobile();
   term = new Terminal({
     theme: {
       background: '#0d1117',
@@ -36,8 +41,8 @@ function initTerminal() {
       brightWhite: '#f0f6fc',
     },
     fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace",
-    fontSize: 14,
-    lineHeight: 1.4,
+    fontSize: mobile ? 10 : 14,
+    lineHeight: mobile ? 1.2 : 1.4,
     cursorBlink: true,
     cursorStyle: 'bar',
     scrollback: 10000,
@@ -53,16 +58,23 @@ function initTerminal() {
   fitAddon.fit();
 
   // Welcome message
-  term.writeln('\x1b[38;2;99;140;255m╔════════════════════════════════════════════════════════════════╗\x1b[0m');
-  term.writeln('\x1b[38;2;99;140;255m║\x1b[0m  ⚡ \x1b[1mClaude Code Runner\x1b[0m — Interactive Terminal                 \x1b[38;2;99;140;255m║\x1b[0m');
-  term.writeln('\x1b[38;2;99;140;255m║\x1b[0m                                                              \x1b[38;2;99;140;255m║\x1b[0m');
-  term.writeln('\x1b[38;2;99;140;255m║\x1b[0m  \x1b[33mMode:\x1b[0m Interactive (real Claude Code UI)                     \x1b[38;2;99;140;255m║\x1b[0m');
-  term.writeln('\x1b[38;2;99;140;255m║\x1b[0m  \x1b[33mCmd:\x1b[0m  claude --dangerously-skip-permissions                  \x1b[38;2;99;140;255m║\x1b[0m');
-  term.writeln('\x1b[38;2;99;140;255m║\x1b[0m                                                              \x1b[38;2;99;140;255m║\x1b[0m');
-  term.writeln('\x1b[38;2;99;140;255m║\x1b[0m  Submit a task → server types the command like a human        \x1b[38;2;99;140;255m║\x1b[0m');
-  term.writeln('\x1b[38;2;99;140;255m║\x1b[0m  → watch Claude Code run in real-time right here!            \x1b[38;2;99;140;255m║\x1b[0m');
-  term.writeln('\x1b[38;2;99;140;255m╚════════════════════════════════════════════════════════════════╝\x1b[0m');
-  term.writeln('');
+  if (mobile) {
+    term.writeln('\x1b[38;2;99;140;255m⚡ Claude Code Runner\x1b[0m');
+    term.writeln('\x1b[33mMode:\x1b[0m Interactive');
+    term.writeln('Submit a task to get started!');
+    term.writeln('');
+  } else {
+    term.writeln('\x1b[38;2;99;140;255m╔════════════════════════════════════════════════════════════════╗\x1b[0m');
+    term.writeln('\x1b[38;2;99;140;255m║\x1b[0m  ⚡ \x1b[1mClaude Code Runner\x1b[0m — Interactive Terminal                 \x1b[38;2;99;140;255m║\x1b[0m');
+    term.writeln('\x1b[38;2;99;140;255m║\x1b[0m                                                              \x1b[38;2;99;140;255m║\x1b[0m');
+    term.writeln('\x1b[38;2;99;140;255m║\x1b[0m  \x1b[33mMode:\x1b[0m Interactive (real Claude Code UI)                     \x1b[38;2;99;140;255m║\x1b[0m');
+    term.writeln('\x1b[38;2;99;140;255m║\x1b[0m  \x1b[33mCmd:\x1b[0m  claude --dangerously-skip-permissions                  \x1b[38;2;99;140;255m║\x1b[0m');
+    term.writeln('\x1b[38;2;99;140;255m║\x1b[0m                                                              \x1b[38;2;99;140;255m║\x1b[0m');
+    term.writeln('\x1b[38;2;99;140;255m║\x1b[0m  Submit a task → server types the command like a human        \x1b[38;2;99;140;255m║\x1b[0m');
+    term.writeln('\x1b[38;2;99;140;255m║\x1b[0m  → watch Claude Code run in real-time right here!            \x1b[38;2;99;140;255m║\x1b[0m');
+    term.writeln('\x1b[38;2;99;140;255m╚════════════════════════════════════════════════════════════════╝\x1b[0m');
+    term.writeln('');
+  }
 
   // Forward keyboard input from browser terminal to server PTY
   term.onData((data) => {
@@ -70,6 +82,13 @@ function initTerminal() {
       ws.send(JSON.stringify({ type: 'input', data }));
     }
   });
+}
+
+// Send terminal size to server so PTY can resize to match
+function sendResize() {
+  if (ws && ws.readyState === WebSocket.OPEN && term && selectedTaskId) {
+    ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+  }
 }
 
 // ─── WebSocket ─────────────────────────────────────────────
@@ -114,6 +133,8 @@ function connectWebSocket() {
 function subscribeToTask(taskId) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'subscribe', taskId }));
+    // Send current terminal size so PTY can match
+    setTimeout(sendResize, 200);
   }
 }
 
@@ -288,6 +309,24 @@ function formatTime(isoString) {
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+// ─── Mobile Tab Switching ─────────────────────────────────
+function switchMobileTab(tab) {
+  const sidebar = document.getElementById('sidebar');
+  const tabs = document.querySelectorAll('.mobile-tab');
+
+  tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
+
+  if (tab === 'tasks') {
+    sidebar.classList.remove('mobile-hidden');
+  } else {
+    sidebar.classList.add('mobile-hidden');
+    // Re-fit terminal when switching to terminal tab
+    setTimeout(() => {
+      if (fitAddon) { fitAddon.fit(); sendResize(); }
+    }, 50);
+  }
+}
+
 // ─── Event Listeners ───────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   try {
@@ -300,11 +339,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Resize terminal on window resize
   window.addEventListener('resize', () => {
-    if (fitAddon) fitAddon.fit();
+    if (fitAddon) {
+      fitAddon.fit();
+      sendResize();
+    }
   });
 
-  // New Task button
+  // New Task button (desktop sidebar + mobile FAB)
   document.getElementById('btnNewTask').addEventListener('click', openModal);
+  document.getElementById('mobileFab').addEventListener('click', openModal);
 
   // Close modal
   document.getElementById('btnCloseModal').addEventListener('click', closeModal);
@@ -328,6 +371,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     closeModal();
     await createTask(prompt, workingDir);
+
+    // On mobile, switch to terminal tab after creating a task
+    if (window.innerWidth <= 768) {
+      switchMobileTab('terminal');
+    }
   });
 
   // Stop task
@@ -344,6 +392,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Refresh task list
   document.getElementById('btnRefresh').addEventListener('click', fetchTasks);
+
+  // Mobile tab bar
+  document.querySelectorAll('.mobile-tab').forEach((tab) => {
+    tab.addEventListener('click', () => switchMobileTab(tab.dataset.tab));
+  });
+
+  // Mobile: switch to terminal when selecting a task
+  const origSelectTask = selectTask;
+  selectTask = function(taskId) {
+    origSelectTask(taskId);
+    if (window.innerWidth <= 768) {
+      switchMobileTab('terminal');
+    }
+  };
 
   // Auto-refresh task list every 5 seconds
   setInterval(fetchTasks, 5000);
